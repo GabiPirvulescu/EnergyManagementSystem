@@ -1,0 +1,25 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  color: #333; 
+}
+
+.form input,
+.form select,
+.form textarea {
+  width: 95%;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.form button {
+  width: 100%;
+}
+
+.formError {
+  color: #f44336;
+  margin-top: 10px;
+}

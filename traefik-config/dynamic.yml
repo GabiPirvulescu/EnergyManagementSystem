@@ -1,0 +1,17 @@
+http:
+  middlewares:
+    my-cors:
+      headers:
+        accessControlAllowOriginList:
+          - "http://localhost:5173"
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "*"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 100
+        addVaryHeader: true

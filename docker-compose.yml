@@ -1,0 +1,313 @@
+services:
+  # --- API GATEWAY / REVERSE PROXY (TRAEFIK) ---
+  reverse-proxy:
+    image: traefik:v3.0
+    container_name: traefik-proxy
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--accesslog=true"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik-config:/etc/traefik/dynamic:ro
+    networks:
+      - shared-network
+    labels:
+      - "traefik.http.middlewares.my-cors.headers.accessControlAllowOriginList=http://localhost:5173"
+      - "traefik.http.middlewares.my-cors.headers.accessControlAllowMethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.my-cors.headers.accessControlAllowHeaders=*"
+      - "traefik.http.middlewares.my-cors.headers.addVaryHeader=true"
+
+  # --- User service ---
+  user-db:
+    image: mysql:8.0
+    container_name: user-db
+    environment:
+      MYSQL_ROOT_PASSWORD: gabi2003
+      MYSQL_DATABASE: ds_user_database
+    volumes:
+      - user-db-data:/var/lib/mysql
+    networks:
+      - shared-network
+
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://user-db:3306/ds_user_database
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: gabi2003
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQLDialect
+      jwt.secret: "bWljaGktZXN0ZS1tYXJ0aWFuLXNpLWEtdmVuaXQtc2EtZnVyZS1wb3JzY2hlLXVsLWJsYXphdC1hbC11bWFuaXRhdGlp"
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      - user-db
+      - rabbitmq
+    restart: on-failure
+    networks:
+      - shared-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.user-service.rule=PathPrefix(`/users`) || PathPrefix(`/docs/user`) || PathPrefix(`/api-docs/user`)"
+      - "traefik.http.routers.user-service.entrypoints=web"
+      - "traefik.http.services.user-service.loadbalancer.server.port=8081"
+      - "traefik.http.routers.user-service.middlewares=my-cors@file"
+
+  # --- DeviceService ---
+  device-db:
+    image: mysql:8.0
+    container_name: device-db
+    environment:
+      MYSQL_ROOT_PASSWORD: gabi2003
+      MYSQL_DATABASE: ds_device_database
+    volumes:
+      - device-db-data:/var/lib/mysql
+    networks:
+      - shared-network
+
+  device-service:
+    build: ./device-service
+    container_name: device-service
+    environment:
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:mysql://device-db:3306/ds_device_database
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: gabi2003
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQLDialect
+      jwt.secret: "bWljaGktZXN0ZS1tYXJ0aWFuLXNpLWEtdmVuaXQtc2EtZnVyZS1wb3JzY2hlLXVsLWJsYXphdC1hbC11bWFuaXRhdGlp"
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      - device-db
+      - rabbitmq
+    restart: on-failure
+    networks:
+      - shared-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.device-service.rule=PathPrefix(`/devices`) || PathPrefix(`/docs/device`) || PathPrefix(`/api-docs/device`)"
+      - "traefik.http.routers.device-service.entrypoints=web"
+      - "traefik.http.services.device-service.loadbalancer.server.port=8082"
+      - "traefik.http.routers.device-service.middlewares=my-cors@file"
+
+  # --- Auth service ---
+  auth-db:
+    image: mysql:8.0
+    container_name: auth-db
+    environment:
+      MYSQL_ROOT_PASSWORD: gabi2003
+      MYSQL_DATABASE: ds_credential_database
+    volumes:
+      - auth-db-data:/var/lib/mysql
+    networks:
+      - shared-network
+
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    environment:
+      SERVER_PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:mysql://auth-db:3306/ds_credential_database
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: gabi2003
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQLDialect
+      jwt.secret: "bWljaGktZXN0ZS1tYXJ0aWFuLXNpLWEtdmVuaXQtc2EtZnVyZS1wb3JzY2hlLXVsLWJsYXphdC1hbC11bWFuaXRhdGlp"
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      - auth-db
+      - rabbitmq
+    restart: on-failure
+    networks:
+      - shared-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth-service.rule=PathPrefix(`/auth`) || PathPrefix(`/docs/auth`) || PathPrefix(`/api-docs/auth`)"
+      - "traefik.http.routers.auth-service.entrypoints=web"
+      - "traefik.http.services.auth-service.loadbalancer.server.port=8083"
+      - "traefik.http.routers.auth-service.middlewares=my-cors@file"
+
+      # --- message broker - rabbitMQ ---
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - shared-network
+
+  monitoring-db:
+    image: mysql:8.0
+    container_name: monitoring-db
+    environment:
+      MYSQL_ROOT_PASSWORD: gabi2003
+      MYSQL_DATABASE: ds_monitoring_database
+    volumes:
+      - monitoring-db-data:/var/lib/mysql
+    networks:
+      - shared-network
+
+  monitoring-service-1:
+    build: ./monitoring-service
+    container_name: monitoring-service-1
+    environment:
+      SERVER_PORT: 8084
+      SPRING_DATASOURCE_URL: jdbc:mysql://monitoring-db:3306/ds_monitoring_database
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: gabi2003
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQLDialect
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      jwt.secret: "bWljaGktZXN0ZS1tYXJ0aWFuLXNpLWEtdmVuaXQtc2EtZnVyZS1wb3JzY2hlLXVsLWJsYXphdC1hbC11bWFuaXRhdGlp"
+      # 👇 UNIQUE QUEUE FOR THIS REPLICA
+      DEVICE_QUEUE_NAME: ingest_queue_0
+    depends_on:
+      - monitoring-db
+      - rabbitmq
+    ports:
+      - "8082:8084"
+    restart: on-failure
+    networks:
+      - shared-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.monitoring-service-1.rule=PathPrefix(`/monitoring`)"
+      - "traefik.http.routers.monitoring-service-1.entrypoints=web"
+      - "traefik.http.services.monitoring-service-1.loadbalancer.server.port=8084"
+      - "traefik.http.routers.monitoring-service-1.middlewares=my-cors@file"
+
+  monitoring-service-2:
+    build: ./monitoring-service
+    container_name: monitoring-service-2
+    environment:
+      SERVER_PORT: 8084
+      SPRING_DATASOURCE_URL: jdbc:mysql://monitoring-db:3306/ds_monitoring_database
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: gabi2003
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQLDialect
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      jwt.secret: "bWljaGktZXN0ZS1tYXJ0aWFuLXNpLWEtdmVuaXQtc2EtZnVyZS1wb3JzY2hlLXVsLWJsYXphdC1hbC11bWFuaXRhdGlp"
+      DEVICE_QUEUE_NAME: ingest_queue_1
+    depends_on:
+      - monitoring-db
+      - rabbitmq
+    ports:
+      - "8083:8084"
+    restart: on-failure
+    networks:
+      - shared-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.monitoring-service-2.rule=PathPrefix(`/monitoring`)"
+      - "traefik.http.routers.monitoring-service-2.entrypoints=web"
+      - "traefik.http.services.monitoring-service-2.loadbalancer.server.port=8084"
+      - "traefik.http.routers.monitoring-service-2.middlewares=my-cors@file"
+
+  monitoring-service-3:
+    build: ./monitoring-service
+    container_name: monitoring-service-3
+    environment:
+      SERVER_PORT: 8084
+      SPRING_DATASOURCE_URL: jdbc:mysql://monitoring-db:3306/ds_monitoring_database
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: gabi2003
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQLDialect
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      jwt.secret: "bWljaGktZXN0ZS1tYXJ0aWFuLXNpLWEtdmVuaXQtc2EtZnVyZS1wb3JzY2hlLXVsLWJsYXphdC1hbC11bWFuaXRhdGlp"
+      DEVICE_QUEUE_NAME: ingest_queue_2
+    depends_on:
+      - monitoring-db
+      - rabbitmq
+    ports:
+      - "8084:8084"
+    restart: on-failure
+    networks:
+      - shared-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.monitoring-service-3.rule=PathPrefix(`/monitoring`)"
+      - "traefik.http.routers.monitoring-service-3.entrypoints=web"
+      - "traefik.http.services.monitoring-service-3.loadbalancer.server.port=8084"
+      - "traefik.http.routers.monitoring-service-3.middlewares=my-cors@file"
+
+  websocket-service:
+    build: ./websocket-service
+    container_name: websocket-service
+    environment:
+      SERVER_PORT: 8085
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      - rabbitmq
+    networks:
+      - shared-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.websocket-service.rule=PathPrefix(`/ws`)"
+      - "traefik.http.routers.websocket-service.entrypoints=web"
+      - "traefik.http.services.websocket-service.loadbalancer.server.port=8085"
+      - "traefik.http.routers.websocket-service.middlewares=my-cors@file"
+
+  load-balancing-service:
+    build:
+      context: ./load-balancing-service
+      dockerfile: Dockerfile
+    container_name: load-balancing-service
+    environment:
+      SERVER_PORT: 8090
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      - rabbitmq
+    networks:
+      - shared-network
+    restart: on-failure
+
+networks:
+  shared-network:
+    driver: bridge
+
+volumes:
+  user-db-data:
+  device-db-data:
+  auth-db-data:
+  monitoring-db-data:
+  rabbitmq_data:
